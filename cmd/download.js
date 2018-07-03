@@ -1,20 +1,16 @@
 const { h, render, Component, Color } = require("ink");
 const { List, ListItem } = require("./ink-checkbox");
+const TextInput = require('ink-text-input');
 const Spinner = require('ink-spinner');
 const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
+const Query = require('./query');
 
 readline.emitKeypressEvents(process.stdin);
 process.stdin.setRawMode(true);
 
-const mkdirSync = path => {
-    try {
-        fs.mkdirSync(path);
-    } catch (err) {
-        if (err.code !== 'EEXIST') throw err;
-    }
-};
+//TODO:read http info from cli
 
 class DownloadAssets extends Component {
     constructor() {
@@ -30,17 +26,40 @@ class DownloadAssets extends Component {
         this.handleListSubmission = this.handleListSubmission.bind(this);
     }
 
-    componentWillMount() {
-        fs.readFile('./src/sampleData.json', "utf8", (err, data) => {
-            if (err) throw err;
-            const assetData = JSON.parse(data);
-            this.setState({ data: assetData.data.translatableAssets });
-            let names = [];
-            assetData.data.translatableAssets.forEach(asset => {
-                names = [...names, asset.__typename];
-            });
-            this.setState({ assetNames: names });
+    //download whole JSON
+    async downloadData() {
+        let assets;
+        let names = [];
+        try {
+            assets = await Query.getAssets();
+        } catch (e) {
+            console.error(e);
+        }
+        //console.log(JSON.stringify(assets.data));
+        this.setState({
+            data: assets.data.translatableAssets
         });
+        assets.data.translatableAssets.forEach(asset => {
+            names = [...names, asset.__typename];
+        });
+        this.setState({ assetNames: names });
+    }
+
+    componentWillMount() {
+        this.downloadData();
+        console.log("will mount");
+
+        // fs.readFile('./src/sampleData.json',"utf8", (err, data) => {
+        //     if (err) throw err;
+        //     const assetData = JSON.parse(data);
+        //     this.setState({data: assetData.data.translatableAssets});
+        //     let names = [];
+        //     assetData.data.translatableAssets.forEach(asset => {
+        //        names = [...names, asset.__typename];
+        //     });
+        //     this.setState({assetNames: names});
+        //     }
+        // );
     }
 
     handleListSubmission(list) {
@@ -199,11 +218,19 @@ class DownloadEachFile extends Component {
             null,
             " ",
             h(Spinner, { green: true }),
-            " ",
+            " Downloading ",
             this.props.name,
             " "
         );
     }
 }
+
+const mkdirSync = path => {
+    try {
+        fs.mkdirSync(path);
+    } catch (err) {
+        if (err.code !== 'EEXIST') throw err;
+    }
+};
 
 render(h(DownloadAssets, null));
