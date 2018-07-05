@@ -1,7 +1,7 @@
 const { h, Component } = require('ink');
 const figures = require('figures');
 const PropTypes = require('prop-types');
-const CheckBox = require('./box');
+const CheckBox = require('./checkbox');
 const Cursor = require('./cursor');
 
 const stdin = process.stdin;

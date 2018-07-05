@@ -12,12 +12,16 @@ const fragmentMatcher = require('./fragmentMatcher');
 
 // const authToken = "TEST_KHDCw9Ll4JJxa0OL1zKCVMouIbtF1BMX"; // username:password encoded in base64
 
-const Query = (domain, tenant, authToken) => {
+const Query = ({
+  domain: domain,
+  tenant: tenant,
+  authToken: authToken
+}) => {
   return {
     getClient() {
       const uri = domain + "/api/v1/" + tenant + "/graphql";
       const headers = {
-        Authorization: authToken //base64
+        Authorization: 'Basic ' + authToken //base64
       };
       const client = new ApolloClient({
         link: new HttpLink({ uri, headers, fetch }),
@@ -27,6 +31,7 @@ const Query = (domain, tenant, authToken) => {
     },
 
     uploadAssets(translationInstanceInput) {
+      //console.log(translationInstanceInput);
       return this.getClient().mutate({
         mutation: gql`
           mutation ($translationInstanceInput: TranslationInstanceInput!) {
@@ -52,6 +57,7 @@ const Query = (domain, tenant, authToken) => {
                 translations{
                   id
                   locale
+                  content
                 }
               }
               ...on TenantTheme {
