@@ -15,7 +15,14 @@ const base64 = require("base-64");
 readline.emitKeypressEvents(process.stdin);
 process.stdin.setRawMode(true);
 
-//TODO:read http info from cli
+//TODO: reconstruct download directory
+
+/*
+  --\typename
+      -- \program id
+        -- \key
+          -- *.json
+*/
 
 class DownloadAssets extends Component {
   constructor(props) {
@@ -53,7 +60,8 @@ class DownloadAssets extends Component {
       data: assets.data.translatableAssets
     });
     assets.data.translatableAssets.forEach(asset => {
-      names = [...names, asset.__typename];
+      const key = asset.__typename + " - " + asset.key;
+      names = [...names, key];
     });
     this.setState({ assetNames: names });
   }
@@ -217,6 +225,7 @@ class DownloadEachFile extends Component {
       this.downloadEachTranslation({ name: asset.__typename, data: JSON.stringify(asset.variables) });
       asset.translationInfo.translations.map(translation => {
         const transID = translation.id.split('/');
+        mkdirSync();
         this.downloadEachTranslation({ name: transID[0] + '-' + transID[1], data: JSON.stringify(translation.content) });
       });
     } else {
