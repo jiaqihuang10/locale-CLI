@@ -66,7 +66,15 @@ class UploadAssets extends Component {
           }).getAssets();
         
         assets.data.translatableAssets.forEach(asset => {
-            keys = [...keys, asset.key];
+            if (asset.__typename == 'TenantTheme' && !keys.includes( 'TenantTheme' )) {
+                keys = [...keys, 'TenantTheme'];
+            } else if (asset.__typename == 'ProgramLinkConfig' && !keys.includes( 'ProgramLinkConfig' )) {
+                keys = [...keys, 'ProgramLinkConfig'];
+            } else {
+                if (!keys.includes(asset.key) && asset.key !== undefined) {
+                    keys = [...keys, asset.key];
+                }
+            }
         });
         this.setState({ validKeys: keys });   
     }
@@ -79,9 +87,7 @@ class UploadAssets extends Component {
 
        
     render() {
-        if (this.state.uploadDone) {
-            return (<Checkmark assetId={this.state.assetId} setCheckmark={this.setCheckmark} />);
-        } else if (this.state.filelist.length > 0) {
+        if (this.state.filelist.length > 0) {
             return (<UploadingFiles handleUploadDone={this.handleUploadDone} 
                                    filelist={this.state.filelist}
                                    options={this.props.options}/>);
@@ -94,59 +100,52 @@ class UploadAssets extends Component {
     }
 }
 
-
-function readFile (filepath) {
-    fs.open(filepath, 'r', (err, fd) => {
-        if (err) {
-            return console.error(err);
-        }
-        fs.readFile(filepath, 'utf8', (err, data) => {
-            if(err) {
-                return console.error(err);
-            }
-            this.setState({
-                inputData: data,
-                fileRead: true
-            })
-        });
-    });
-}
-
 //check if the folder name matches valid keys
 function validateDir(dir, validKeys) {
-    const keys1 = dir.split('\\');
-    const keys2 = (keys1[keys1.length-1]).split('/');
-
-    // console.log("valid keys\n " + validKeys);
-    // console.log(key[key.length-1]);
-    return validKeys.includes(keys2[keys2.length-1]);
+    const key = getNameFromPath(dir);
+    return validKeys.includes(key);
 }
 
 //check if the filename matches the locale format
 function validateLocale(dir) {
-    const names1 = dir.split('\\');
-    const names2 = (names1[names1.length-1]).split('/');
+    const name = getNameFromPath(dir);
     const re = /^([a-z]{2}_[A-Z]{2}).json$/; 
-    console.log('name: ' + names2[names2.length-1]);
-    return re.test(names2[names2.length-1]);
+    console.log('name: ' + name);
+    return re.test(name);
 }
 
+function getNameFromPath(path) {
+    const names1 = path.split('\\');
+    const names2 = (names1[names1.length-1]).split('/');
+
+    return names2[names2.length-1];
+}
+
+function getKeyFromPath(path) {
+    const names1 = path.split('\\');
+    if (names1.length > 1) {
+        return names1[names1.length-2];
+    } else {
+        const names2 = path.split('/');
+        return names2[names2.length-2];
+    }
+}
 
 class Checkmark extends Component {
     constructor(props) {
         super(props);
     }
     
-   componentDidMount() {
-       this.props.setCheckmark();
-   }
+//    componentDidMount() {
+//        this.props.setCheckmark();
+//    }
 
     render() {
-        return (<div> <Color green> ✔ </Color> {this.props.assetId} uploaded </div>);
+        return (<div> <Color green> ✔ </Color> Uploaded {this.props.name}  </div>);
     }
 }
 
-//Validate and Read in all files
+//Validate and get a list of paths of all files to be uploaded
 class ReadingFile extends Component {
     constructor(props) {
         super(props);
@@ -157,8 +156,6 @@ class ReadingFile extends Component {
     //******************* to be fixed */
     // walk down the directory given, validate folder names and file names, list paths for all valid files to be uploaded 
     walkSync(dir, filelist = []) {
-        console.log(typeof dir);
-        console.log(typeof filelist);
         if(fs.lstatSync(dir).isDirectory()) {
             if(validateDir(dir, this.props.validKeys)) {
                 console.log('valid key');
@@ -181,8 +178,9 @@ class ReadingFile extends Component {
 
     componentWillMount() {
         //validate dir and files
+        console.log('valid keys');
         console.log(this.props.validKeys);
-        const newfilelist = (this.walkSync(this.props.options.filepath));
+        const newfilelist = (this.walkSync(this.props.options.filepath))[0];
         console.log(newfilelist);
 
         this.props.setFileList(newfilelist);
@@ -193,45 +191,126 @@ class ReadingFile extends Component {
     }
 }
 
+//read and ready to upload each file
+//props - filepathlist
 class UploadingFiles extends Component {
     constructor(props) {
         super(props);
 
-        this.uploadFile = this.uploadFile.bind(this);
+        this.state = {
+            uploadDone : {} //keep track of each file upload
+        }
+
+        this.handleSingleUploadDone = this.handleSingleUploadDone.bind(this);
     }
 
-    
+    componentWillMount() {
+        let temp = {};
+        this.props.filelist.forEach( path => {
+            temp[path] = false;
+        });
+        this.setState( {
+            uploadDone : temp
+        });
+    }
 
+    handleSingleUploadDone(path) {
+        this.setState (prevState => {
+            let list = prevState.uploadDone;
+            list[path] = true;
+            return {
+                uploadDone: list
+            };
+        })
+    }
+    
+    render() {
+        let uploadComponentList = [];
+        this.props.filelist.forEach ( path => {
+            if(this.state.uploadDone[path]) {
+                uploadComponentList = [...uploadComponentList, <Checkmark name={path}/>];
+            } else {
+                uploadComponentList = [...uploadComponentList, <UploadingEachFile path={path} options={this.props.options} handleSingleUploadDone={this.handleSingleUploadDone}/>];
+            }
+        });
+
+        return uploadComponentList;
+    }
     
 }
 
-class UploadEachFile extends Component {
+function standardizeLocale(filename){
+    const str = filename.split('.');
+    let localeStr = str[0].split('-');
+    if (localeStr.length > 1) {
+        return localeStr[0] + '_' + localeStr[1];
+    } else {
+        return localeStr[0];
+    }
+    
+}
+function generateAssetKey({typename, path, programId}) {
+    const map = {
+        'ProgramEmailConfig': 'e',
+        'ProgramWidgetConfig': 'w',
+        'ProgramLinkConfig': 'l'
+    }
+    const filename = getNameFromPath(path);
+    const key = getKeyFromPath(path);
+
+    const locale = standardizeLocale(filename);
+    console.log(locale);
+    if (typename === 'TenantTheme') {
+        return 'TenantTheme' + '/' + locale;   
+    } else {
+        return ('p/'+programId+'/'+map[typename]+'/'+key+'/'+locale);
+    }
+}
+
+class UploadingEachFile extends Component {
     constructor(props) {
         super(props);
 
     }
 
-    async uploadFile() {
-        let { domainname, tenant, filepath, auth, assetId} = this.props.options;
-        console.log("about to upload " + assetId);
+     uploadFile (path) {
+        fs.open(path, 'r', (err, fd) => {
+            if (err) {
+                return console.error(err);
+            }
+            fs.readFile(path, 'utf8', (err, data) => {
+                if(err) {
+                    return console.error(err);
+                }
+                this.assetUpsert(data);
+            });
+        });
+    }
+
+    async assetUpsert (data) {
+        let { domainname, tenant, auth, assetId, programId, typename} = this.props.options;
+        const transId = generateAssetKey({typename: typename, path: this.props.path, programId: programId});
+        console.log("about to upload " + this.props.path);
         const translationInstanceInput = {
-            id: assetId,
-            content: JSON.parse(this.props.inputData)
+            id: transId,
+            content: JSON.parse(data)
         }
+        console.log(transId);
         try {
             await Query({domain: domainname, tenant: tenant, authToken: auth}).uploadAssets(translationInstanceInput);
         } catch (e) {
             console.error(e);
+            process.exit();
         }
-       this.props.handleUploadDone();
+       this.props.handleSingleUploadDone(this.props.path);
     }
 
     componentDidMount() {
-        this.uploadFile();
+        this.uploadFile(this.props.path);
     }
 
     render() {
-        return (<div> <Spinner green /> Uploading {this.props.assetId} </div>);
+        return (<div> <Spinner green /> Uploading {this.props.path} </div>);
     }
 
 }
