@@ -7,6 +7,8 @@ const fs = require('fs');
 const path = require('path');
 const Query = require('./query');
 const base64 = require('base-64');
+const glob = require('glob');
+const LocaleCode = require('locale-code');
 
 readline.emitKeypressEvents(process.stdin);
 process.stdin.setRawMode(true);
@@ -24,13 +26,13 @@ class UploadAssets extends Component {
             validKeys:[],
             filelist: []
         }
-        this.handleUploadDone = this.handleUploadDone.bind(this);
+        this.handleUploadAllDone = this.handleUploadAllDone.bind(this);
         this.setCheckmark = this.setCheckmark.bind(this);
         this.setFileList = this.setFileList.bind(this);
     }
 
     
-    handleUploadDone() {
+    handleUploadAllDone() {
         this.setState({
             uploadDone: true
         })
@@ -88,7 +90,7 @@ class UploadAssets extends Component {
        
     render() {
         if (this.state.filelist.length > 0) {
-            return (<UploadingFiles handleUploadDone={this.handleUploadDone} 
+            return (<UploadingFiles handleUploadDone={this.handleUploadAllDone} 
                                    filelist={this.state.filelist}
                                    options={this.props.options}/>);
         } else {
@@ -100,18 +102,16 @@ class UploadAssets extends Component {
     }
 }
 
-//check if the folder name matches valid keys
-function validateDir(dir, validKeys) {
-    const key = getNameFromPath(dir);
-    return validKeys.includes(key);
-}
 
 //check if the filename matches the locale format
 function validateLocale(dir) {
-    const name = getNameFromPath(dir);
-    const re = /^([a-z]{2}_[A-Z]{2}).json$/; 
-    console.log('name: ' + name);
-    return re.test(name);
+    let locale = getNameFromPath(dir);
+    const temp = locale.split('_');
+    if (temp.length > 1) {
+        locale = temp[0] + '-' + temp[1];
+    }
+    console.log(locale);
+    return LocaleCode.validate((locale.split('.'))[0]);
 }
 
 function getNameFromPath(path) {
@@ -149,41 +149,40 @@ class Checkmark extends Component {
 class ReadingFile extends Component {
     constructor(props) {
         super(props);
-
-        this.walkSync = this.walkSync.bind(this);
     }
 
-    //******************* to be fixed */
-    // walk down the directory given, validate folder names and file names, list paths for all valid files to be uploaded 
-    walkSync(dir, filelist = []) {
-        if(fs.lstatSync(dir).isDirectory()) {
-            if(validateDir(dir, this.props.validKeys)) {
-                console.log('valid key');
-                return fs.readdirSync(dir).map( f => this.walkSync(path.join(dir,f), filelist));
-            } else {
-                //go deeper until folders with valid key names are found
-                console.log(dir + " is not a valid key");
-            }
-        } else {
-            if(validateLocale(dir)) {
-                console.log('valid json name');
-                filelist.push(dir);
-                return filelist;
-            } else {
-                console.log(dir + " does not have a valid file name");
-                return;
-            }
-        }
+    //put valid keys into a pattern string for directory traversal and validation
+    getValidKeyPattern(validKeys) {
+        //valid key patterns
+        let pattern = '@(';
+        validKeys.forEach( key => {
+            pattern = pattern + key + '|';
+        });
+        return pattern.substring(0,pattern.length-1)+')';
+
+
+    }
+
+    getValidFilelist(filelist, validkeys) {
+        return filelist.filter(filename => {
+            let name = filename.split('/');
+            return validkeys.includes(name[name.length-2]) && validateLocale(name[name.length-1]) ;
+        });
     }
 
     componentWillMount() {
-        //validate dir and files
-        console.log('valid keys');
-        console.log(this.props.validKeys);
-        const newfilelist = (this.walkSync(this.props.options.filepath))[0];
-        console.log(newfilelist);
-
-        this.props.setFileList(newfilelist);
+        const validKeys = this.props.validKeys;
+        const validKeyPattern = this.getValidKeyPattern(validKeys);
+        console.log(LocaleCode.validate('en-US')); // true
+        const pattern = this.props.options.filepath+'/**/' + validKeyPattern+'/*.json';
+        console.log(pattern);
+        glob(pattern, {mark:true}, (err, files) => {
+            if(err) {
+                console.error(err);
+            }
+            const validfiles = this.getValidFilelist(files,validKeys);
+            this.props.setFileList(validfiles);
+        } )
     }
 
     render() {
@@ -198,8 +197,9 @@ class UploadingFiles extends Component {
         super(props);
 
         this.state = {
-            uploadDone : {} //keep track of each file upload
-        }
+            eachFileDone: {},
+            allDone:false
+          };
 
         this.handleSingleUploadDone = this.handleSingleUploadDone.bind(this);
     }
@@ -214,15 +214,27 @@ class UploadingFiles extends Component {
         });
     }
 
-    handleSingleUploadDone(path) {
-        this.setState (prevState => {
-            let list = prevState.uploadDone;
-            list[path] = true;
-            return {
-                uploadDone: list
-            };
-        })
+    componentWillUpdate() {
+        if (this.state.allDone) {
+            return this.props.handleUploadAllDone();
+        }
     }
+
+    handleUploadDone(name) {
+        this.setState(prevState => {
+          let status = prevState.eachFileDone;
+          if (status[name] !== undefined) {
+            status[name] = true;
+            let allFileChecked = true;
+            Object.keys(status).forEach( (k) => { allFileChecked =  allFileChecked && status[k] });
+            return { 
+                eachFileDone: status,
+                allDone: allFileChecked} ;
+            }
+        });
+      }
+    
+    
     
     render() {
         let uploadComponentList = [];
@@ -230,7 +242,7 @@ class UploadingFiles extends Component {
             if(this.state.uploadDone[path]) {
                 uploadComponentList = [...uploadComponentList, <Checkmark name={path}/>];
             } else {
-                uploadComponentList = [...uploadComponentList, <UploadingEachFile path={path} options={this.props.options} handleSingleUploadDone={this.handleSingleUploadDone}/>];
+                uploadComponentList = [...uploadComponentList, <UploadingEachFile path={path} options={this.props.options} handleUploadDone={this.handleUploadDone}/>];
             }
         });
 
@@ -302,7 +314,7 @@ class UploadingEachFile extends Component {
             console.error(e);
             process.exit();
         }
-       this.props.handleSingleUploadDone(this.props.path);
+       this.props.handleUploadDone(this.props.path);
     }
 
     componentDidMount() {
