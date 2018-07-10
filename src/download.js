@@ -16,10 +16,22 @@ process.stdin.setRawMode(true);
 //TODO: reconstruct download directory
 
 /*
-  --\typename
-      -- \program id
-        -- \key
-          -- *.json
+  - assets 
+    - TenantTheme/
+    - Program 1/
+      - Emails/
+        - ReferralStarted/
+          - de_DE.json
+          - ja_JP.json
+        - ReferralCompleted/
+        - ReferralStarted.json
+        - ReferralCompleted.json
+      - Widgets/
+        - referrerWidget/
+        - referredWidget/
+      - Messaging/
+        - default/
+    - Program 2/
 */
 
 class DownloadAssets extends Component {
@@ -38,13 +50,13 @@ class DownloadAssets extends Component {
     this.handleAllDone = this.handleAllDone.bind(this);
   }
 
-  //download whole JSON
   async downloadData() {
     let assets;
-    let names = [];
+    let listItem = [];
 
     let { domainname, tenant, filepath, auth} = this.props.options;
     
+    //get Tenant Theme
     try {
       assets = await Query({
         domain: domainname,
@@ -58,10 +70,20 @@ class DownloadAssets extends Component {
       data: assets.data.translatableAssets
     });
     assets.data.translatableAssets.forEach(asset => {
-      const key = asset.__typename + " - " + asset.key;
-      names = [...names, key];
+      const typename = asset.__typename;
+      let itemStr = '';
+      if (typename !== 'TenantTheme') {
+          const programId = (asset.translationInfo.id.split('/'))[1];
+          itemStr = typename + ' - ' + programId;
+        } else {
+        itemStr = 'TenantTheme';
+      }
+      if (!listItem.includes(itemStr)) {
+          listItem = [...listItem, itemStr];
+      }
     });
-    this.setState({ assetNames: names });
+    this.setState({ assetNames: listItem });
+    
   }
 
   componentWillMount() {
@@ -112,12 +134,6 @@ class ListFile extends Component {
     super(props);
     //this.handleSubmit = this.handleSubmit.bind(this);
   }
-
-//   handleSubmit(selectedList) {
-//     //download file for each element in list
-//     console.log(selectedList);
-//     process.exit(0);
-//   }
 
   render() {
     return (
@@ -216,7 +232,7 @@ class DownloadEachFile extends Component {
       this.downloadEachTranslation({name: asset.__typename, data:JSON.stringify(asset.variables)});
       asset.translationInfo.translations.map( translation => {
         const transID = (translation.id).split('/');
-          mkdirSync()
+          mkdirSync();
           this.downloadEachTranslation({name: transID[0]+'-' + transID[1], data: JSON.stringify(translation.content)});
       });
     } else {

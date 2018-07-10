@@ -38,8 +38,8 @@ class UploadAssets extends Component {
         })
     }
 
-    componentDidUpdate() {
-        if(this.state.checkmarked) {
+    componentWillUpdate() {
+        if(this.state.uploadDone) {
             process.exit();
         }
     }
@@ -90,7 +90,7 @@ class UploadAssets extends Component {
        
     render() {
         if (this.state.filelist.length > 0) {
-            return (<UploadingFiles handleUploadDone={this.handleUploadAllDone} 
+            return (<UploadingFiles handleUploadAllDone={this.handleUploadAllDone} 
                                    filelist={this.state.filelist}
                                    options={this.props.options}/>);
         } else {
@@ -110,7 +110,6 @@ function validateLocale(dir) {
     if (temp.length > 1) {
         locale = temp[0] + '-' + temp[1];
     }
-    console.log(locale);
     return LocaleCode.validate((locale.split('.'))[0]);
 }
 
@@ -159,8 +158,6 @@ class ReadingFile extends Component {
             pattern = pattern + key + '|';
         });
         return pattern.substring(0,pattern.length-1)+')';
-
-
     }
 
     getValidFilelist(filelist, validkeys) {
@@ -173,9 +170,7 @@ class ReadingFile extends Component {
     componentWillMount() {
         const validKeys = this.props.validKeys;
         const validKeyPattern = this.getValidKeyPattern(validKeys);
-        console.log(LocaleCode.validate('en-US')); // true
         const pattern = this.props.options.filepath+'/**/' + validKeyPattern+'/*.json';
-        console.log(pattern);
         glob(pattern, {mark:true}, (err, files) => {
             if(err) {
                 console.error(err);
@@ -210,7 +205,7 @@ class UploadingFiles extends Component {
             temp[path] = false;
         });
         this.setState( {
-            uploadDone : temp
+            eachFileDone : temp
         });
     }
 
@@ -220,29 +215,26 @@ class UploadingFiles extends Component {
         }
     }
 
-    handleUploadDone(name) {
+    handleSingleUploadDone(name) {
         this.setState(prevState => {
-          let status = prevState.eachFileDone;
-          if (status[name] !== undefined) {
+            let status = prevState.eachFileDone;
             status[name] = true;
             let allFileChecked = true;
             Object.keys(status).forEach( (k) => { allFileChecked =  allFileChecked && status[k] });
             return { 
                 eachFileDone: status,
                 allDone: allFileChecked} ;
-            }
-        });
+            });
       }
     
-    
-    
+
     render() {
         let uploadComponentList = [];
         this.props.filelist.forEach ( path => {
-            if(this.state.uploadDone[path]) {
+            if(this.state.eachFileDone[path]) {
                 uploadComponentList = [...uploadComponentList, <Checkmark name={path}/>];
             } else {
-                uploadComponentList = [...uploadComponentList, <UploadingEachFile path={path} options={this.props.options} handleUploadDone={this.handleUploadDone}/>];
+                uploadComponentList = [...uploadComponentList, <UploadingEachFile path={path} options={this.props.options} handleSingleUploadDone={this.handleSingleUploadDone}/>];
             }
         });
 
@@ -271,7 +263,6 @@ function generateAssetKey({typename, path, programId}) {
     const key = getKeyFromPath(path);
 
     const locale = standardizeLocale(filename);
-    console.log(locale);
     if (typename === 'TenantTheme') {
         return 'TenantTheme' + '/' + locale;   
     } else {
@@ -302,19 +293,18 @@ class UploadingEachFile extends Component {
     async assetUpsert (data) {
         let { domainname, tenant, auth, assetId, programId, typename} = this.props.options;
         const transId = generateAssetKey({typename: typename, path: this.props.path, programId: programId});
-        console.log("about to upload " + this.props.path);
         const translationInstanceInput = {
             id: transId,
             content: JSON.parse(data)
         }
-        console.log(transId);
+        //console.log(transId);
         try {
             await Query({domain: domainname, tenant: tenant, authToken: auth}).uploadAssets(translationInstanceInput);
         } catch (e) {
             console.error(e);
             process.exit();
         }
-       this.props.handleUploadDone(this.props.path);
+       this.props.handleSingleUploadDone(this.props.path);
     }
 
     componentDidMount() {

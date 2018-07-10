@@ -44,6 +44,30 @@ const Query = ({
       })
     },
 
+    listPrograms() {
+      return this.getClient().query({
+        query: gql `
+          programs {
+            data {
+              name
+              id
+            }
+          }  
+        `
+      });
+    },
+    
+    getProgramName(programId) {
+      return this.getClient().query({
+        query: gql`
+          query($programId: ID! ) {
+            programs(id: $programId){
+              name
+            }
+          }`
+      });
+    },
+
     getAssets() {
       return this.getClient().query({
         query: gql `

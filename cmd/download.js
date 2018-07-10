@@ -43,7 +43,7 @@ class DownloadAssets extends Component {
   //download whole JSON
   async downloadData() {
     let assets;
-    let names = [];
+    let listItem = [];
 
     let { domainname, tenant, filepath, auth } = this.props.options;
 
@@ -60,10 +60,19 @@ class DownloadAssets extends Component {
       data: assets.data.translatableAssets
     });
     assets.data.translatableAssets.forEach(asset => {
-      const key = asset.__typename + " - " + asset.key;
-      names = [...names, key];
+      const typename = asset.__typename;
+      let itemStr = '';
+      if (typename !== 'TenantTheme') {
+        const programId = asset.translationInfo.id.split('/')[1];
+        itemStr = typename + ' - ' + programId;
+      } else {
+        itemStr = 'TenantTheme';
+      }
+      if (!listItem.includes(itemStr)) {
+        listItem = [...listItem, itemStr];
+      }
     });
-    this.setState({ assetNames: names });
+    this.setState({ assetNames: listItem });
   }
 
   componentWillMount() {
@@ -110,12 +119,6 @@ class ListFile extends Component {
     super(props);
     //this.handleSubmit = this.handleSubmit.bind(this);
   }
-
-  //   handleSubmit(selectedList) {
-  //     //download file for each element in list
-  //     console.log(selectedList);
-  //     process.exit(0);
-  //   }
 
   render() {
     return h(
