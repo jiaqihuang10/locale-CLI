@@ -9,6 +9,7 @@ const fs = require("fs");
 const path = require("path");
 const Query = require('./query');
 const base64 = require("base-64");
+const mkdirp = require('mkdirp');
 
 readline.emitKeypressEvents(process.stdin);
 process.stdin.setRawMode(true);
@@ -18,6 +19,10 @@ process.stdin.setRawMode(true);
 /*
   - assets 
     - TenantTheme/
+      - TenantTheme.json
+      - translations/
+        - de_DE.json
+        - ja_JP.json
     - Program 1/
       - Emails/
         - ReferralStarted/
@@ -39,9 +44,11 @@ class DownloadAssets extends Component {
     super(props);
 
     this.state = {
-      data: null,
-      assetNames: [],
-      selectedFiles: [],
+      tenantThemeData: null,
+      programList: null,
+      programMap:null,
+      itemList:null,
+      selectedItem: [],
       submitted: false,
       downloadDone:false
     };
@@ -51,9 +58,9 @@ class DownloadAssets extends Component {
   }
 
   async downloadData() {
-    let assets;
+    let assets, programData, TenantTheme;
     let listItem = [];
-
+    let progMap = {};
     let { domainname, tenant, filepath, auth} = this.props.options;
     
     //get Tenant Theme
@@ -63,27 +70,46 @@ class DownloadAssets extends Component {
         tenant: tenant,
         authToken: auth
       }).getAssets();
+
+      assets.data.translatableAssets.forEach(asset => {
+        const typename = asset.__typename;
+        let itemStr = '';
+        if (typename === 'TenantTheme') {
+            this.setState({
+              tenantThemeData: asset
+            });
+            listItem.push("TenantTheme");
+          }
+      });
+  
     } catch (e) {
       console.error(e);
     }
-    this.setState({
-      data: assets.data.translatableAssets
-    });
-    assets.data.translatableAssets.forEach(asset => {
-      const typename = asset.__typename;
-      let itemStr = '';
-      if (typename !== 'TenantTheme') {
-          const programId = (asset.translationInfo.id.split('/'))[1];
-          itemStr = typename + ' - ' + programId;
-        } else {
-        itemStr = 'TenantTheme';
-      }
-      if (!listItem.includes(itemStr)) {
-          listItem = [...listItem, itemStr];
-      }
-    });
-    this.setState({ assetNames: listItem });
+ 
     
+    // list available programs - {name:id} key-value pairs
+    try {
+      programData = await Query({
+        domain: domainname,
+        tenant: tenant,
+        authToken: auth
+      }).listPrograms();
+    } catch (e) {
+      console.error(e);
+    }
+
+    programData.data.programs.data.forEach(program => {
+      const programName = program.name.trim();
+      listItem.push(programName);
+      progMap[programName] = program.id;
+      
+    });   
+    
+    this.setState({
+      programList: programData.data.programs,
+      programMap: progMap,
+      itemList: listItem
+    });
   }
 
   componentWillMount() {
@@ -98,7 +124,7 @@ class DownloadAssets extends Component {
 
   handleListSubmission(list) {
     this.setState({
-      selectedFiles: list,
+      selectedItem: list,
       submitted: true
     });
   }
@@ -113,18 +139,23 @@ class DownloadAssets extends Component {
     if (this.state.submitted) {
       return (
         <Downloading
-          selectedFiles={this.state.selectedFiles}
-          data={this.state.data} handleAllDone={this.handleAllDone}
+          selectedItem={this.state.selectedItem}
+          programList={this.state.programList}
+          programMap={this.state.programMap}
+          tenantThemeData={this.state.tenantThemeData} 
+          handleAllDone={this.handleAllDone}
           options={this.props.options}
         />
       );
     } else {
-      return (
-        <ListFile
-          assetNames={this.state.assetNames}
-          onListSubmitted={this.handleListSubmission}
-        />
-      );
+      if (this.state.itemList) {
+        return (
+          <ListFile
+            itemList={this.state.itemList}
+            onListSubmitted={this.handleListSubmission}
+          />
+        );
+      }
     }
   }
 }
@@ -139,14 +170,13 @@ class ListFile extends Component {
     return (
       <div>
         <List onSubmit={list => this.props.onListSubmitted(list)}>
-          {this.props.assetNames.map(l => <ListItem value={l}>{l}</ListItem>)}
+          {this.props.itemList.map(l => <ListItem value={l}>{l}</ListItem>)}
         </List>
       </div>
     );
   }
 }
 
-//PROPS: selectedFiles, data
 class Downloading extends Component {
   constructor(props) {
     super(props);
@@ -173,13 +203,15 @@ class Downloading extends Component {
     });
   }
 
+  /************************************** */
+  //mkdir recursively
   componentWillMount() {
     // set the list of download status track for each file
     this.dir = this.props.options.filepath;
     mkdirSync(this.dir);
     let status = {};
-    this.props.data.map(asset => {
-      status[asset.__typename] = false;
+    this.props.selectedItem.map(item => {
+      status[item] = false;
     });
     this.setState({
       eachFileDone: status
@@ -194,18 +226,17 @@ class Downloading extends Component {
 
 
   render() {
-    const downloadList = this.props.data.map(asset => {
-      if (this.props.selectedFiles.includes(asset.__typename)) {
-        if (this.state.eachFileDone[asset.__typename]) {
-            return <FinishCheckmark checkmark={this.handleDownloadDone} assetName={asset.__typename} />;   
-        } else {
-              return (<DownloadEachFile
-                name={asset.__typename}
-                dir={this.dir}
-                asset={asset}
-                handleDownloadDone={this.handleDownloadDone}
-              />);
-        }
+    const downloadList = this.props.selectedItem.map( item => {
+      if(this.state.eachFileDone[item]) {
+          return <FinishCheckmark name={item}/>
+      } else {
+        return (<DownloadEachFile dir={this.dir}
+                                  name={item}
+                                  programMap={this.props.programMap}
+                                  tenantThemeData={this.props.tenantThemeData}
+                                  handleDownloadDone={this.handleDownloadDone}
+                                  options={this.props.options}
+                                   />);
       }
     });
     return <span>{downloadList}</span>;
@@ -221,37 +252,80 @@ class DownloadEachFile extends Component {
     };
   }
 
-  componentDidMount() {
-    this.downloadFile();
-  }
+  async download() {
+    const {domainname, tenant, auth} = this.props.options;
+    let programData = null;
 
-  downloadFile() {
-    const asset = this.props.asset;
-    
-    if (asset.__typename === "TenantTheme") {
-      this.downloadEachTranslation({name: asset.__typename, data:JSON.stringify(asset.variables)});
-      asset.translationInfo.translations.map( translation => {
-        const transID = (translation.id).split('/');
-          mkdirSync();
-          this.downloadEachTranslation({name: transID[0]+'-' + transID[1], data: JSON.stringify(translation.content)});
+    if(this.props.name === 'TenantTheme') {
+      const path = this.props.dir + '/TenantTheme';
+      await mkdirp(path, (err) => {
+        if(err) console.error(err);
+
+        //write default
+      this.writeFile({data:JSON.stringify(this.props.tenantThemeData.variables), dir: path, name: 'TenantTheme'});
+      //write translations
+      this.props.tenantThemeData.translationInfo.translations.forEach(translation => {
+        this.writeFile({data:JSON.stringify(translation.content), dir: path, name: translation.locale});
       });
+      //handle tenantTheme done
+      this.props.handleDownloadDone(this.props.name);
+      });      
     } else {
-      this.downloadEachTranslation({name: asset.__typename, data:JSON.stringify(asset.values)});
-    }
-      //console.log(asset.variables);
+      //per program
+      const programId = this.props.programMap[this.props.name];
+      try {
+        const receivedData = await Query({
+          domain: domainname,
+          tenant: tenant,
+          authToken: auth
+        }).getProgramData(programId);
+         programData = receivedData.data.program;
+      } catch (e) {
+        console.error(e);
+        process.exit(1);
+      }
+      const programRootPath = this.props.dir + '/' + this.props.name;
+      mkdirp(programRootPath, (err) => {
+        if(err) console.error(err);
+      });
+      //put default in root folder of each program
+      programData.translatableAssets.forEach(asset => {
+          const path = programRootPath + '/'+ asset.__typename;
+          mkdirp(path, (err) => {
+            if(err) console.error(err);
+          });
+          //write default
+          if (asset.__typename === 'ProgramLinkConfig') {
+            this.writeFile({data:JSON.stringify(asset.messaging), dir: path, name: 'default'});
+          } else {
+            this.writeFile({data:JSON.stringify(asset.values), dir: path, name: asset.key});
+          }
+          //write translations
+          if(asset.translationInfo.translations.length > 0) {
+            const transPath = path + '/' + asset.key;
+            mkdirp(transPath, (err) => {
+              if(err) console.error(err);
+            });
+            asset.translationInfo.translations.forEach(translation => {
+              this.writeFile({data:JSON.stringify(translation.content), dir:transPath, name:translation.locale});
+            })
+          }
+      });
+      this.props.handleDownloadDone(this.props.name);
+    }    
+   
   }
 
-
-  //download file, indicator: spinner
-  downloadEachTranslation({name,data}) {
+  writeFile({data,dir,name}) {
     const filePath =
       path.normalize(
         path.format({
           root: "/ignored",
-          dir: this.props.dir,
+          dir: dir,
           base: name
         })
-      ) + ".json";
+    ) + ".json";
+    
     fs.open(filePath, "w+", (err, fd) => {
       if (err) {
         return console.error(err);
@@ -263,20 +337,14 @@ class DownloadEachFile extends Component {
           if (err) {
             return console.error(err);
           }
-          console.log(name + 'done');
-          this.props.handleDownloadDone(name);
         });
       });
     });
   }
 
-  // componentWillUnmount() {
-  //   fs.close(this.fd, err => {
-  //     if (err) {
-  //       return console.error(err);
-  //     }
-  //   });
-  // }
+  componentDidMount() {
+    this.download();
+  }
 
   render() {
     return (
@@ -288,20 +356,21 @@ class DownloadEachFile extends Component {
   }
 }
 
+
+
 class FinishCheckmark extends Component {
     constructor(props) {
         super(props)
     }
 
-    componentDidMount() {
-        this.props.checkmark(this.props.assetName);
-    }
+    // componentDidMount() {
+    //     this.props.checkmark(this.props.name);
+    // }
 
     render() {
         return (
             <div>
-              {" "}
-              <Color green> ✔ </Color> {this.props.assetName} downloaded{" "}
+              <Color green> ✔ </Color> {this.props.name} translations downloaded
             </div>
           );
     }

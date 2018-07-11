@@ -57,7 +57,7 @@ class UploadAssets extends Component {
     }
 
     async setValidKeys() {
-        let { domainname, tenant, filepath, auth, assetId, programId, } = this.props.options;
+        let { domainname, tenant, filepath, auth, assetId, typename, programId } = this.props.options;
         let assets = null;
         let keys = [];
 
@@ -67,17 +67,27 @@ class UploadAssets extends Component {
             authToken: auth
           }).getAssets();
         
-        assets.data.translatableAssets.forEach(asset => {
-            if (asset.__typename == 'TenantTheme' && !keys.includes( 'TenantTheme' )) {
-                keys = [...keys, 'TenantTheme'];
-            } else if (asset.__typename == 'ProgramLinkConfig' && !keys.includes( 'ProgramLinkConfig' )) {
-                keys = [...keys, 'ProgramLinkConfig'];
-            } else {
-                if (!keys.includes(asset.key) && asset.key !== undefined) {
-                    keys = [...keys, asset.key];
+        if (typename !== undefined) {
+            assets.data.translatableAssets.forEach(asset => {
+                if(asset.__typename === typename) {
+                    keys = [...keys,asset.key];
                 }
-            }
-        });
+            });
+        } else {
+            //typename not provided, upload all valid translations inside the given directory
+            assets.data.translatableAssets.forEach(asset => {
+                if (asset.__typename == 'TenantTheme' && !keys.includes( 'TenantTheme' )) {
+                    keys = [...keys, 'TenantTheme'];
+                } else if (asset.__typename == 'ProgramLinkConfig' && !keys.includes( 'ProgramLinkConfig' )) {
+                    keys = [...keys, 'ProgramLinkConfig'];
+                } else {
+                    if (!keys.includes(asset.key) && asset.key !== undefined) {
+                        keys = [...keys, asset.key];
+                    }
+                }
+            });
+        }
+        
         this.setState({ validKeys: keys });   
     }
 
@@ -85,8 +95,6 @@ class UploadAssets extends Component {
         //get valid assetKeys for this tenant
         this.setValidKeys();    
     }
-
-
        
     render() {
         if (this.state.filelist.length > 0) {
@@ -176,6 +184,7 @@ class ReadingFile extends Component {
                 console.error(err);
             }
             const validfiles = this.getValidFilelist(files,validKeys);
+            console.log(validfiles);
             this.props.setFileList(validfiles);
         } )
     }
@@ -220,12 +229,12 @@ class UploadingFiles extends Component {
             let status = prevState.eachFileDone;
             status[name] = true;
             let allFileChecked = true;
-            Object.keys(status).forEach( (k) => { allFileChecked =  allFileChecked && status[k] });
+            Object.keys(status).forEach((k) => { allFileChecked =  allFileChecked && status[k]});
             return { 
                 eachFileDone: status,
                 allDone: allFileChecked} ;
-            });
-      }
+        });
+    }
     
 
     render() {
@@ -273,10 +282,9 @@ function generateAssetKey({typename, path, programId}) {
 class UploadingEachFile extends Component {
     constructor(props) {
         super(props);
-
     }
 
-     uploadFile (path) {
+    uploadFile (path) {
         fs.open(path, 'r', (err, fd) => {
             if (err) {
                 return console.error(err);
@@ -285,26 +293,23 @@ class UploadingEachFile extends Component {
                 if(err) {
                     return console.error(err);
                 }
-                this.assetUpsert(data);
-            });
-        });
-    }
 
-    async assetUpsert (data) {
-        let { domainname, tenant, auth, assetId, programId, typename} = this.props.options;
-        const transId = generateAssetKey({typename: typename, path: this.props.path, programId: programId});
-        const translationInstanceInput = {
-            id: transId,
-            content: JSON.parse(data)
-        }
-        //console.log(transId);
-        try {
-            await Query({domain: domainname, tenant: tenant, authToken: auth}).uploadAssets(translationInstanceInput);
-        } catch (e) {
-            console.error(e);
-            process.exit();
-        }
-       this.props.handleSingleUploadDone(this.props.path);
+            let { domainname, tenant, auth, assetId, programId, typename} = this.props.options;
+            const transId = generateAssetKey({typename: typename, path: this.props.path, programId: programId});
+            const translationInstanceInput = {
+                id: transId,
+                content: JSON.parse(data)
+            }
+            //console.log(transId);
+            try {
+                Query({domain: domainname, tenant: tenant, authToken: auth}).uploadAssets(translationInstanceInput);
+            } catch (e) {
+                console.error(e);
+                process.exit();
+            }
+        this.props.handleSingleUploadDone(this.props.path);
+                });
+            });
     }
 
     componentDidMount() {
@@ -321,7 +326,7 @@ module.exports = (program) => {
     let upload = program.command("upload");
   
     upload
-      .description("download an translation")
+      .description("upload translations")
       .option('-d,--domainname <domainname>', 'required - domain') //naming collision with domain, use domain name instead
       .option('-u,--authToken <authToken>', 'required - authToken') //the apiKey, use authToken to avoid naming collision
       .option("-t,--tenant <tenant>", "required - which tenant")

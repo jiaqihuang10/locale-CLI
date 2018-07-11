@@ -13,9 +13,9 @@ const fragmentMatcher = require('./fragmentMatcher');
 // const authToken = "TEST_KHDCw9Ll4JJxa0OL1zKCVMouIbtF1BMX"; // username:password encoded in base64
 
 const Query = ({
-  domain: domain,
-  tenant: tenant,
-  authToken: authToken
+  domain,
+  tenant,
+  authToken
 }) => { return {
     getClient() {
       const uri = domain + "/api/v1/" + tenant + "/graphql";
@@ -30,7 +30,6 @@ const Query = ({
     },
 
     uploadAssets(translationInstanceInput) {
-      //console.log(translationInstanceInput);
       return this.getClient().mutate({
         mutation: gql `
           mutation ($translationInstanceInput: TranslationInstanceInput!) {
@@ -47,24 +46,66 @@ const Query = ({
     listPrograms() {
       return this.getClient().query({
         query: gql `
-          programs {
-            data {
-              name
-              id
-            }
-          }  
+          query {
+            programs {
+              data {
+                name
+                id
+              }
+            } 
+          }
         `
       });
     },
-    
-    getProgramName(programId) {
+
+    getProgramData(programId) {
       return this.getClient().query({
         query: gql`
-          query($programId: ID! ) {
-            programs(id: $programId){
+          query($programId: ID!) {
+            program(id: $programId){
               name
+              translatableAssets {
+                translationInfo {
+                  locales
+                  translations {
+                    locale
+                    content
+                  }
+                }
+                __typename
+                ... on ProgramEmailConfig {
+                  key
+                  values
+                }
+                ... on ProgramWidgetConfig {
+                  key
+                  values
+              }
+                ... on ProgramLinkConfig {
+                messaging {
+                  messages{
+                    shareMedium
+                    config
+                  }
+                  messengerLinkOpenGraph{
+                    title
+                    description
+                    image
+                    source
+                  }
+                  shareLinkOpenGraph{
+                    title
+                    description
+                    image
+                    source
+                  }
+                }
+              }
             }
-          }`
+          }
+        }`, variables: {
+          programId
+         }
       });
     },
 

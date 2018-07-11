@@ -13,9 +13,9 @@ const fragmentMatcher = require('./fragmentMatcher');
 // const authToken = "TEST_KHDCw9Ll4JJxa0OL1zKCVMouIbtF1BMX"; // username:password encoded in base64
 
 const Query = ({
-  domain: domain,
-  tenant: tenant,
-  authToken: authToken
+  domain,
+  tenant,
+  authToken
 }) => {
   return {
     getClient() {
@@ -31,7 +31,6 @@ const Query = ({
     },
 
     uploadAssets(translationInstanceInput) {
-      //console.log(translationInstanceInput);
       return this.getClient().mutate({
         mutation: gql`
           mutation ($translationInstanceInput: TranslationInstanceInput!) {
@@ -41,6 +40,72 @@ const Query = ({
           }
          `, variables: {
           translationInstanceInput
+        }
+      });
+    },
+
+    listPrograms() {
+      return this.getClient().query({
+        query: gql`
+          query {
+            programs {
+              data {
+                name
+                id
+              }
+            } 
+          }
+        `
+      });
+    },
+
+    getProgramData(programId) {
+      return this.getClient().query({
+        query: gql`
+          query($programId: ID!) {
+            program(id: $programId){
+              name
+              translatableAssets {
+                translationInfo {
+                  locales
+                  translations {
+                    locale
+                    content
+                  }
+                }
+                __typename
+                ... on ProgramEmailConfig {
+                  key
+                  values
+                }
+                ... on ProgramWidgetConfig {
+                  key
+                  values
+              }
+                ... on ProgramLinkConfig {
+                messaging {
+                  messages{
+                    shareMedium
+                    config
+                  }
+                  messengerLinkOpenGraph{
+                    title
+                    description
+                    image
+                    source
+                  }
+                  shareLinkOpenGraph{
+                    title
+                    description
+                    image
+                    source
+                  }
+                }
+              }
+            }
+          }
+        }`, variables: {
+          programId
         }
       });
     },
