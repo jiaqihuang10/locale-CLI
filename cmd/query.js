@@ -20,6 +20,7 @@ const Query = ({
   return {
     getClient() {
       const uri = domain + "/api/v1/" + tenant + "/graphql";
+      console.log(uri);
       const headers = {
         Authorization: 'Basic ' + authToken //base64
       };

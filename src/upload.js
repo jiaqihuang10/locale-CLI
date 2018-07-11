@@ -19,35 +19,17 @@ class UploadAssets extends Component {
 
         this.state = {
             inputData: {}, 
-            uploadDone: false,
-            fileRead:false,
-            checkmarked: false,
             assetId: this.props.options.assetId,
             validKeys:[],
             filelist: []
         }
         this.handleUploadAllDone = this.handleUploadAllDone.bind(this);
-        this.setCheckmark = this.setCheckmark.bind(this);
         this.setFileList = this.setFileList.bind(this);
     }
 
     
     handleUploadAllDone() {
-        this.setState({
-            uploadDone: true
-        })
-    }
-
-    componentWillUpdate() {
-        if(this.state.uploadDone) {
-            process.exit();
-        }
-    }
-
-    setCheckmark() {
-        this.setState({
-            checkmarked: true
-        });
+        process.exit();
     }
 
     setFileList(list) {
@@ -67,13 +49,15 @@ class UploadAssets extends Component {
             authToken: auth
           }).getAssets();
         
-        if (typename !== undefined) {
-            assets.data.translatableAssets.forEach(asset => {
-                if(asset.__typename === typename) {
-                    keys = [...keys,asset.key];
-                }
-            });
-        } else {
+        // console.log(typename);
+        // if (typename !== undefined) {
+        //     assets.data.translatableAssets.forEach(asset => {
+        //         if(asset.__typename === typename) {
+        //             keys = [...keys,asset.key];
+        //         }
+        //     });
+        //     console.log(keys);
+        // } else {
             //typename not provided, upload all valid translations inside the given directory
             assets.data.translatableAssets.forEach(asset => {
                 if (asset.__typename == 'TenantTheme' && !keys.includes( 'TenantTheme' )) {
@@ -86,8 +70,6 @@ class UploadAssets extends Component {
                     }
                 }
             });
-        }
-        
         this.setState({ validKeys: keys });   
     }
 
@@ -143,9 +125,9 @@ class Checkmark extends Component {
         super(props);
     }
     
-//    componentDidMount() {
-//        this.props.setCheckmark();
-//    }
+   componentDidMount() {
+       this.props.setCheckmark(this.props.name);
+   }
 
     render() {
         return (<div> <Color green> ✔ </Color> Uploaded {this.props.name}  </div>);
@@ -178,13 +160,14 @@ class ReadingFile extends Component {
     componentWillMount() {
         const validKeys = this.props.validKeys;
         const validKeyPattern = this.getValidKeyPattern(validKeys);
+        console.log(validKeys);
         const pattern = this.props.options.filepath+'/**/' + validKeyPattern+'/*.json';
         glob(pattern, {mark:true}, (err, files) => {
             if(err) {
                 console.error(err);
             }
             const validfiles = this.getValidFilelist(files,validKeys);
-            console.log(validfiles);
+            //console.log(validfiles);
             this.props.setFileList(validfiles);
         } )
     }
@@ -202,10 +185,13 @@ class UploadingFiles extends Component {
 
         this.state = {
             eachFileDone: {},
+            eachFileChecked:{},
             allDone:false
           };
 
         this.handleSingleUploadDone = this.handleSingleUploadDone.bind(this);
+        this.setCheckmark = this.setCheckmark.bind(this);
+
     }
 
     componentWillMount() {
@@ -214,13 +200,14 @@ class UploadingFiles extends Component {
             temp[path] = false;
         });
         this.setState( {
-            eachFileDone : temp
+            eachFileDone : temp,
+            eachFileChecked: temp
         });
     }
 
-    componentWillUpdate() {
+    componentDidUpdate() {
         if (this.state.allDone) {
-            return this.props.handleUploadAllDone();
+            this.props.handleUploadAllDone();
         }
     }
 
@@ -228,20 +215,28 @@ class UploadingFiles extends Component {
         this.setState(prevState => {
             let status = prevState.eachFileDone;
             status[name] = true;
-            let allFileChecked = true;
-            Object.keys(status).forEach((k) => { allFileChecked =  allFileChecked && status[k]});
             return { 
-                eachFileDone: status,
-                allDone: allFileChecked} ;
+                eachFileDone: status} ;
         });
     }
     
+    setCheckmark(name) {
+        this.setState(prevState => {
+            let status = prevState.eachFileChecked;
+            status[name] = true;
+            let allFileChecked = true;
+            Object.keys(status).forEach((k) => { allFileChecked =  allFileChecked && status[k]});
+            return { 
+                eachFileChecked: status,
+                allDone: allFileChecked} ;
+        });
+    }
 
     render() {
         let uploadComponentList = [];
         this.props.filelist.forEach ( path => {
             if(this.state.eachFileDone[path]) {
-                uploadComponentList = [...uploadComponentList, <Checkmark name={path}/>];
+                uploadComponentList = [...uploadComponentList, <Checkmark name={path} setCheckmark={this.setCheckmark} />];
             } else {
                 uploadComponentList = [...uploadComponentList, <UploadingEachFile path={path} options={this.props.options} handleSingleUploadDone={this.handleSingleUploadDone}/>];
             }
@@ -300,20 +295,19 @@ class UploadingEachFile extends Component {
                 id: transId,
                 content: JSON.parse(data)
             }
-            //console.log(transId);
             try {
                 Query({domain: domainname, tenant: tenant, authToken: auth}).uploadAssets(translationInstanceInput);
             } catch (e) {
                 console.error(e);
                 process.exit();
             }
-        this.props.handleSingleUploadDone(this.props.path);
-                });
+        });
             });
     }
 
     componentDidMount() {
         this.uploadFile(this.props.path);
+        this.props.handleSingleUploadDone(this.props.path);
     }
 
     render() {

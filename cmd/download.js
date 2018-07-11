@@ -12,9 +12,11 @@ const path = require("path");
 const Query = require('./query');
 const base64 = require("base-64");
 const mkdirp = require('mkdirp');
+const util = require('util');
 
 readline.emitKeypressEvents(process.stdin);
 process.stdin.setRawMode(true);
+const fs_writeFile = util.promisify(fs.writeFile);
 
 //TODO: reconstruct download directory
 
@@ -264,18 +266,19 @@ class DownloadEachFile extends Component {
 
     if (this.props.name === 'TenantTheme') {
       const path = this.props.dir + '/TenantTheme';
-      await mkdirp(path, err => {
+      mkdirp(path, err => {
         if (err) console.error(err);
-
-        //write default
-        this.writeFile({ data: JSON.stringify(this.props.tenantThemeData.variables), dir: path, name: 'TenantTheme' });
-        //write translations
-        this.props.tenantThemeData.translationInfo.translations.forEach(translation => {
-          this.writeFile({ data: JSON.stringify(translation.content), dir: path, name: translation.locale });
-        });
-        //handle tenantTheme done
-        this.props.handleDownloadDone(this.props.name);
       });
+
+      //write default
+      await this.writeFile({ data: JSON.stringify(this.props.tenantThemeData.variables), dir: path, name: 'TenantTheme' });
+      //write translations
+      const translations = this.props.tenantThemeData.translationInfo.translations;
+      for (var i = 0; i < translations.length; i++) {
+        await this.writeFile({ data: JSON.stringify(translations[i].content), dir: path, name: translations[i].locale });
+      }
+      //handle tenantTheme done
+      this.props.handleDownloadDone(this.props.name);
     } else {
       //per program
       const programId = this.props.programMap[this.props.name];
@@ -295,29 +298,85 @@ class DownloadEachFile extends Component {
         if (err) console.error(err);
       });
       //put default in root folder of each program
-      programData.translatableAssets.forEach(asset => {
-        const path = programRootPath + '/' + asset.__typename;
-        mkdirp(path, err => {
+      const assets = programData.translatableAssets;
+
+      for (var i = 0; i < assets.length; i++) {
+        const assetData = assets[i];
+        const path = programRootPath + '/' + assetData.__typename;
+        await mkdirp(path, err => {
           if (err) console.error(err);
         });
         //write default
-        if (asset.__typename === 'ProgramLinkConfig') {
-          this.writeFile({ data: JSON.stringify(asset.messaging), dir: path, name: 'default' });
+        if (assetData.__typename === 'ProgramLinkConfig') {
+          await this.writeFile({ data: JSON.stringify(assetData.messaging), dir: path, name: 'default' });
         } else {
-          this.writeFile({ data: JSON.stringify(asset.values), dir: path, name: asset.key });
+          await this.writeFile({ data: JSON.stringify(assetData.values), dir: path, name: assetData.key });
+          //write translations
+          this.writeTranslation(path, assetData);
         }
-        //write translations
-        if (asset.translationInfo.translations.length > 0) {
-          const transPath = path + '/' + asset.key;
-          mkdirp(transPath, err => {
-            if (err) console.error(err);
-          });
-          asset.translationInfo.translations.forEach(translation => {
-            this.writeFile({ data: JSON.stringify(translation.content), dir: transPath, name: translation.locale });
-          });
-        }
-      });
+      }
+
       this.props.handleDownloadDone(this.props.name);
+    }
+    //   programData.translatableAssets.forEach(asset => {
+    //       const path = programRootPath + '/'+ asset.__typename;
+    //       mkdirp(path, (err) => {
+    //         if(err) console.error(err);
+    //       });
+
+    //       if (asset.__typename === 'ProgramLinkConfig') {
+    //         this.writeFile({data:JSON.stringify(asset.messaging), dir: path, name: 'default'});
+    //       } else {
+    //         this.writeFile({data:JSON.stringify(asset.values), dir: path, name: asset.key});
+    //       }
+    //       //write translations
+    //       if(asset.translationInfo.translations.length > 0) {
+    //         const transPath = path + '/' + asset.key;
+    //         mkdirp(transPath, (err) => {
+    //           if(err) console.error(err);
+    //         });
+
+
+    //       }
+    //   });
+    // }    
+  }
+
+  // writeFile({data,dir,name}) {
+  //   const filePath =
+  //     path.normalize(
+  //       path.format({
+  //         root: "/ignored",
+  //         dir: dir,
+  //         base: name
+  //       })
+  //   ) + ".json";
+
+  //   fs.open(filePath, "w+", (err, fd) => {
+  //     if (err) {
+  //       return console.error(err);
+  //     }
+  //     this.fd = fd;
+  //     //@ts-ignore
+  //     fs.write(fd, data, "utf8", () => {
+  //       fs.close(fd, (err) => {
+  //         if (err) {
+  //           return console.error(err);
+  //         }
+  //       });
+  //     });
+  //   });
+  // }
+
+
+  async writeTranslation(path, assetData) {
+    const transPath = path + '/' + assetData.key;
+    const translations = assetData.translationInfo.translations;
+    await mkdirp(transPath, err => {
+      if (err) console.error(err);
+    });
+    for (var i = 0; i < translations.length; i++) {
+      await this.writeFile({ data: JSON.stringify(translations[i].content), dir: transPath, name: translations[i].locale });
     }
   }
 
@@ -328,20 +387,7 @@ class DownloadEachFile extends Component {
       base: name
     })) + ".json";
 
-    fs.open(filePath, "w+", (err, fd) => {
-      if (err) {
-        return console.error(err);
-      }
-      this.fd = fd;
-      //@ts-ignore
-      fs.write(fd, data, "utf8", () => {
-        fs.close(fd, err => {
-          if (err) {
-            return console.error(err);
-          }
-        });
-      });
-    });
+    return fs_writeFile(filePath, data, { encoding: 'utf8' });
   }
 
   componentDidMount() {
