@@ -258,7 +258,7 @@ class DownloadEachFile extends Component {
     const {domainname, tenant, auth} = this.props.options;
     let programData = null;
 
-    if(this.props.name === 'TenantTheme') {
+    if(this.props.name === 'TenantTheme' || this.props.name === 'ProgramLinkConfig') {
       const path = this.props.dir + '/TenantTheme';
       mkdirp(path, (err) => {
         if(err) console.error(err); });

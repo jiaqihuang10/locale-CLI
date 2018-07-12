@@ -14,6 +14,7 @@ const LocaleCode = require('locale-code');
 
 readline.emitKeypressEvents(process.stdin);
 process.stdin.setRawMode(true);
+const currentValidTypes = ['TenantTheme', 'ProgramEmailConfig', 'ProgramWidgetConfig', 'ProgramLinkConfig'];
 
 class UploadAssets extends Component {
     constructor(props) {
@@ -44,35 +45,41 @@ class UploadAssets extends Component {
         let assets = null;
         let keys = [];
 
-        assets = await Query({
-            domain: domainname,
-            tenant: tenant,
-            authToken: auth
-        }).getAssets();
+        if (typename === 'TenantTheme') {
+            keys.push('TenantTheme');
+        } else if (typename === 'ProgramLinkConfig') {
+            keys.push('default');
+        } else {
+            if (programId === undefined) {
+                console.log("Program ID required for ProgramEmailConfig, ProgramWidgetConfig, ProgramLinkConfig");
+                process.exit();
+            }
 
-        console.log(typename);
-        if (typename !== undefined) {
-            assets.data.translatableAssets.forEach(asset => {
-                if (asset.__typename === typename) {
+            try {
+                const receivedData = await Query({
+                    domain: domainname,
+                    tenant: tenant,
+                    authToken: auth
+                }).getProgramData(programId);
+                if (receivedData.data.program) {
+                    assets = receivedData.data.program.translatableAssets;
+                } else {
+                    console.log("Program with id " + programId + " not found in current tenant.");
+                    process.exit(0);
+                }
+            } catch (e) {
+                console.error(e);
+                process.exit(1);
+            }
+            assets.forEach(asset => {
+                if (asset.__typename === typename && !keys.includes(asset.key)) {
                     keys = [...keys, asset.key];
                 }
             });
-            console.log(keys);
-        } else {
-            //typename not provided, upload all valid translations inside the given directory
-            assets.data.translatableAssets.forEach(asset => {
-                if (asset.__typename == 'TenantTheme' && !keys.includes('TenantTheme')) {
-                    keys = [...keys, 'TenantTheme'];
-                } else if (asset.__typename == 'ProgramLinkConfig' && !keys.includes('ProgramLinkConfig')) {
-                    keys = [...keys, 'ProgramLinkConfig'];
-                } else {
-                    if (!keys.includes(asset.key) && asset.key !== undefined) {
-                        keys = [...keys, asset.key];
-                    }
-                }
-            });
         }
-        this.setState({ validKeys: keys });
+        this.setState({
+            validKeys: keys
+        });
     }
 
     componentWillMount() {
@@ -163,17 +170,16 @@ class ReadingFile extends Component {
         return pattern.substring(0, pattern.length - 1) + ')';
     }
 
-    getValidFilelist(filelist, validkeys) {
+    getValidFilelist(filelist, validKeys) {
         return filelist.filter(filename => {
             let name = filename.split('/');
-            return validkeys.includes(name[name.length - 2]) && validateLocale(name[name.length - 1]);
+            return validKeys.includes(name[name.length - 2]) && validateLocale(name[name.length - 1]);
         });
     }
 
     componentWillMount() {
         const validKeys = this.props.validKeys;
         const validKeyPattern = this.getValidKeyPattern(validKeys);
-        console.log(validKeys);
         const pattern = this.props.options.filepath + '/**/' + validKeyPattern + '/*.json';
         glob(pattern, { mark: true }, (err, files) => {
             if (err) {
@@ -350,7 +356,11 @@ module.exports = program => {
 
     upload.description("upload translations").option('-d,--domainname <domainname>', 'required - domain') //naming collision with domain, use domain name instead
     .option('-u,--authToken <authToken>', 'required - authToken') //the apiKey, use authToken to avoid naming collision
-    .option("-t,--tenant <tenant>", "required - which tenant").option('-a, --assetId [assetId]', 'optional - id for the single translation file upload').option('-f,--filepath <filepath>', 'required - the file path').option('-p, --typename [typename]', 'optional - valid typenames: [TenantTheme, ProgramEmailConfig, ProgramLinkConfig, ProgramWidgetConfig] or [w, e, l, t]').option('-i, --programId [programId]', 'optional - Program Id is required for types [ProgramEmailConfig, ProgramLinkConfig, ProgramWidgetConfig]').action(options => {
+    .option("-t,--tenant <tenant>", "required - which tenant").option('-a, --assetId [assetId]', 'optional - id for the single translation file upload').option('-f,--filepath <filepath>', 'required - the file path').option('-p, --typename <typename>', 'required - valid typenames: [TenantTheme, ProgramEmailConfig, ProgramLinkConfig, ProgramWidgetConfig] or [w, e, l, t]').option('-i, --programId [programId]', 'optional - Program Id is required for types [ProgramEmailConfig, ProgramLinkConfig, ProgramWidgetConfig]').action(options => {
+        if (!currentValidTypes.includes(options.typename)) {
+            console.log("Invalid typename, must be one of " + currentValidTypes);
+            process.exit();
+        }
         const newOptions = _extends({
             auth: base64.encode(":" + options.authToken)
         }, options);
