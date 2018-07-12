@@ -20,7 +20,6 @@ class UploadAssets extends Component {
 
         this.state = {
             inputData: {}, 
-            assetId: this.props.options.assetId,
             validKeys: [],
             filelist: []
         }
@@ -41,7 +40,7 @@ class UploadAssets extends Component {
 
 
     async setValidKeys() {
-        let { domainname, tenant, filepath, auth, assetId, typename, programId } = this.props.options;
+        let { domainname, tenant,auth, typename, programId } = this.props.options;
         let assets = null;
         let keys = [];
         
@@ -97,7 +96,7 @@ class UploadAssets extends Component {
         } else {
             //in the process of reading file
             if (this.state.validKeys.length > 0) {
-                return (<ReadingFile assetId={this.state.assetId} options={this.props.options} validKeys={this.state.validKeys} setFileList={this.setFileList} />);
+                return (<ReadingFile options={this.props.options} validKeys={this.state.validKeys} setFileList={this.setFileList} />);
             }
         }
     }
@@ -165,7 +164,7 @@ class ReadingFile extends Component {
         return filelist.filter(filename => {
             let name = filename.split('/');
             if (!validateLocale(name[name.length-1])) {
-                console.log(filename+" : invalid locale");
+                console.log(filename+" : invalid locale code");
             }
             return validKeys.includes(name[name.length-2]) && validateLocale(name[name.length-1]) ;
         });
@@ -174,7 +173,12 @@ class ReadingFile extends Component {
     componentWillMount() {
         const validKeys = this.props.validKeys;
         const validKeyPattern = this.getValidKeyPattern(validKeys);
-        const pattern = this.props.options.filepath+'/**/' + validKeyPattern+'/*.json';
+        let pattern = null;
+        if(fs.lstatSync(this.props.options.filepath).isDirectory()) {
+            pattern = this.props.options.filepath+'/**/' + validKeyPattern+'/*.json';
+        } else {
+            pattern = this.props.options.filepath;
+        }
         glob(pattern, {mark:true}, (err, files) => {
             if(err) {
                 console.error(err);
@@ -184,12 +188,13 @@ class ReadingFile extends Component {
                 console.log("No valid translation file found.");
                 process.exit();
             }
+            
             this.props.setFileList(validfiles);
         } )
     }
 
     render() {
-        return (<div> <Spinner green /> Reading {this.props.assetId} </div>);
+        return (<div> <Spinner green /> Reading </div>);
     }
 }
 
@@ -304,7 +309,7 @@ class UploadingEachFile extends Component {
                     return console.error(err);
                 }
             
-            let { domainname, tenant, auth, assetId, programId, typename} = this.props.options;
+            let { domainname, tenant, auth, programId, typename} = this.props.options;
             const transId = generateAssetKey({typename: typename, path: this.props.path, programId: programId});
             const translationInstanceInput = {
                 id: transId,
@@ -340,7 +345,6 @@ module.exports = (program) => {
       .option('-d,--domainname <domainname>', 'required - domain') //naming collision with domain, use domain name instead
       .option('-u,--authToken <authToken>', 'required - authToken') //the apiKey, use authToken to avoid naming collision
       .option("-t,--tenant <tenant>", "required - which tenant")
-      .option('-a, --assetId [assetId]', 'optional - id for the single translation file upload')
       .option('-f,--filepath <filepath>', 'required - the file path')
       .option('-p, --typename <typename>', 'required - valid typenames: [TenantTheme, ProgramEmailConfig, ProgramLinkConfig, ProgramWidgetConfig] or [w, e, l, t]')
       .option('-i, --programId [programId]', 'optional - Program Id is required for types [ProgramEmailConfig, ProgramLinkConfig, ProgramWidgetConfig]')
