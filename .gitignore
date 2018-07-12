@@ -1,4 +1,4 @@
-dist/
+cmd/
 !www/favicon.ico
 www/
 assets/
