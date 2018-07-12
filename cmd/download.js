@@ -213,7 +213,7 @@ class Downloading extends Component {
   componentWillMount() {
     // set the list of download status track for each file
     this.dir = this.props.options.filepath;
-    mkdirSync(this.dir);
+    //mkdirSync(this.dir);
     let status = {};
     this.props.selectedItem.map(item => {
       status[item] = false;
@@ -266,13 +266,10 @@ class DownloadEachFile extends Component {
 
     if (this.props.name === 'TenantTheme') {
       const path = this.props.dir + '/TenantTheme';
-      mkdirp(path, err => {
-        if (err) console.error(err);
-      });
-
-      //write default
-      await this.writeFile({ data: JSON.stringify(this.props.tenantThemeData.variables), dir: path, name: 'TenantTheme' });
-      //write translations
+      mkdirp.sync(path);
+      //write default - in root asset folder
+      await this.writeFile({ data: JSON.stringify(this.props.tenantThemeData.variables), dir: this.props.dir, name: 'TenantTheme' });
+      //write translations - in 'TenantTheme' folder
       const translations = this.props.tenantThemeData.translationInfo.translations;
       for (var i = 0; i < translations.length; i++) {
         await this.writeFile({ data: JSON.stringify(translations[i].content), dir: path, name: translations[i].locale });
@@ -294,87 +291,33 @@ class DownloadEachFile extends Component {
         process.exit(1);
       }
       const programRootPath = this.props.dir + '/' + this.props.name;
-      mkdirp(programRootPath, err => {
-        if (err) console.error(err);
-      });
+      mkdirp.sync(programRootPath);
       //put default in root folder of each program
       const assets = programData.translatableAssets;
 
       for (var i = 0; i < assets.length; i++) {
         const assetData = assets[i];
         const path = programRootPath + '/' + assetData.__typename;
-        await mkdirp(path, err => {
-          if (err) console.error(err);
-        });
+        mkdirp.sync(path);
         //write default
         if (assetData.__typename === 'ProgramLinkConfig') {
           await this.writeFile({ data: JSON.stringify(assetData.messaging), dir: path, name: 'default' });
+          const transPath = path + '/default';
+          this.writeTranslation(transPath, assetData);
         } else {
           await this.writeFile({ data: JSON.stringify(assetData.values), dir: path, name: assetData.key });
           //write translations
-          this.writeTranslation(path, assetData);
+          const transPath = path + '/' + assetData.key;
+          this.writeTranslation(transPath, assetData);
         }
       }
-
-      this.props.handleDownloadDone(this.props.name);
     }
-    //   programData.translatableAssets.forEach(asset => {
-    //       const path = programRootPath + '/'+ asset.__typename;
-    //       mkdirp(path, (err) => {
-    //         if(err) console.error(err);
-    //       });
-
-    //       if (asset.__typename === 'ProgramLinkConfig') {
-    //         this.writeFile({data:JSON.stringify(asset.messaging), dir: path, name: 'default'});
-    //       } else {
-    //         this.writeFile({data:JSON.stringify(asset.values), dir: path, name: asset.key});
-    //       }
-    //       //write translations
-    //       if(asset.translationInfo.translations.length > 0) {
-    //         const transPath = path + '/' + asset.key;
-    //         mkdirp(transPath, (err) => {
-    //           if(err) console.error(err);
-    //         });
-
-
-    //       }
-    //   });
-    // }    
+    this.props.handleDownloadDone(this.props.name);
   }
 
-  // writeFile({data,dir,name}) {
-  //   const filePath =
-  //     path.normalize(
-  //       path.format({
-  //         root: "/ignored",
-  //         dir: dir,
-  //         base: name
-  //       })
-  //   ) + ".json";
-
-  //   fs.open(filePath, "w+", (err, fd) => {
-  //     if (err) {
-  //       return console.error(err);
-  //     }
-  //     this.fd = fd;
-  //     //@ts-ignore
-  //     fs.write(fd, data, "utf8", () => {
-  //       fs.close(fd, (err) => {
-  //         if (err) {
-  //           return console.error(err);
-  //         }
-  //       });
-  //     });
-  //   });
-  // }
-
-
-  async writeTranslation(path, assetData) {
-    const transPath = path + '/' + assetData.key;
+  async writeTranslation(transPath, assetData) {
     const translations = assetData.translationInfo.translations;
-    await mkdirp(transPath, err => {
-      if (err) console.error(err);
-    });
+    mkdirp.sync(transPath);
     for (var i = 0; i < translations.length; i++) {
       await this.writeFile({ data: JSON.stringify(translations[i].content), dir: transPath, name: translations[i].locale });
     }
@@ -411,10 +354,6 @@ class FinishCheckmark extends Component {
   constructor(props) {
     super(props);
   }
-
-  // componentDidMount() {
-  //     this.props.checkmark(this.props.name);
-  // }
 
   render() {
     return h(

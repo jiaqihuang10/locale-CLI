@@ -173,6 +173,9 @@ class ReadingFile extends Component {
     getValidFilelist(filelist, validKeys) {
         return filelist.filter(filename => {
             let name = filename.split('/');
+            if (!validateLocale(name[name.length - 1])) {
+                console.log(filename + " : invalid locale");
+            }
             return validKeys.includes(name[name.length - 2]) && validateLocale(name[name.length - 1]);
         });
     }
@@ -186,7 +189,10 @@ class ReadingFile extends Component {
                 console.error(err);
             }
             const validfiles = this.getValidFilelist(files, validKeys);
-            //console.log(validfiles);
+            if (validfiles.length === 0) {
+                console.log("No valid translation file found.");
+                process.exit();
+            }
             this.props.setFileList(validfiles);
         });
     }
@@ -292,7 +298,6 @@ function generateAssetKey({ typename, path, programId }) {
     };
     const filename = getNameFromPath(path);
     const key = getKeyFromPath(path);
-
     const locale = standardizeLocale(filename);
     if (typename === 'TenantTheme') {
         return 'TenantTheme' + '/' + locale;
@@ -311,7 +316,7 @@ class UploadingEachFile extends Component {
             if (err) {
                 return console.error(err);
             }
-            fs.readFile(path, 'utf8', (err, data) => {
+            fs.readFile(path, 'utf8', async (err, data) => {
                 if (err) {
                     return console.error(err);
                 }
@@ -323,7 +328,8 @@ class UploadingEachFile extends Component {
                     content: JSON.parse(data)
                 };
                 try {
-                    Query({ domain: domainname, tenant: tenant, authToken: auth }).uploadAssets(translationInstanceInput);
+                    await Query({ domain: domainname, tenant: tenant, authToken: auth }).uploadAssets(translationInstanceInput);
+                    this.props.handleSingleUploadDone(this.props.path);
                 } catch (e) {
                     console.error(e);
                     process.exit();
@@ -334,7 +340,6 @@ class UploadingEachFile extends Component {
 
     componentDidMount() {
         this.uploadFile(this.props.path);
-        this.props.handleSingleUploadDone(this.props.path);
     }
 
     render() {
