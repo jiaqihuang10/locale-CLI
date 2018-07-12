@@ -409,10 +409,22 @@ module.exports = program => {
       "optional - Program Id is required for ProgramEmailConfig, ProgramLinkConfig, ProgramWidgetConfig"
     )
     .action(options => {
+
+        if (!options.domainname || !options.apiKey || !options.tenant || !options.filepath || !options.typename) {
+            console.log('Missing parameter.');
+            return;
+        }
+
+
+
       if (!currentValidTypes.includes(options.typename)) {
-        console.log("Invalid typename, must be one of " + currentValidTypes);
+        console.log("Invalid typename, must be one of TenantTheme, ProgramEmailConfig, ProgramLinkConfig, ProgramWidgetConfig.");
         process.exit();
       }
+      if (options.typename !== 'TenantTheme' && !options.programId) {
+        console.log('Program Id required for ProgramEmailConfig, ProgramLinkConfig, ProgramWidgetConfig.');
+        return;
+    }
       const newOptions = {
         auth: base64.encode(":" + options.apiKey ),
         ...options

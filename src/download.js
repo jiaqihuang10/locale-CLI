@@ -350,13 +350,6 @@ class FinishCheckmark extends Component {
     );
   }
 }
-const mkdirSync = path => {
-  try {
-    fs.mkdirSync(path);
-  } catch (err) {
-    if (err.code !== "EEXIST") throw err;
-  }
-};
 
 module.exports = program => {
   let download = program.command("download");
@@ -364,12 +357,17 @@ module.exports = program => {
   download
     .description("download an translation")
     .option("-d,--domainname <domainname>", "required - domain") //naming collision with domain, use domain name instead
-    .option("-k,--authToken <authToken>", "required - authToken") //the apiKey, use authToken to avoid naming collision
+    .option("-k,--apiKey <apiKey>", "required - authToken") //the apiKey, use authToken to avoid naming collision
     .option("-t,--tenant <tenant>", "required - which tenant")
     .option("-f,--filepath <filepath>", "required - the file path")
     .action(options => {
+      console.log(options.apiKey);
+      if (!options.domainname || !options.apiKey || !options.tenant || !options.filepath) {
+        console.log('Missing parameter.');
+        return;
+    }
       const newOptions = {
-        auth: base64.encode(":" + options.authToken),
+        auth: base64.encode(":" + options.apiKey),
         ...options
       };
       render(<DownloadAssets options={newOptions} />);
