@@ -35,10 +35,10 @@ class DownloadAssets extends Component {
   }
 
   async downloadData() {
-    let assets, programData, TenantTheme;
+    let assets, programData;
     let listItem = [];
     let progMap = {};
-    let { domainname, tenant, filepath, auth } = this.props.options;
+    let { domainname, tenant, auth } = this.props.options;
 
     //get Tenant Theme
     try {
@@ -50,7 +50,6 @@ class DownloadAssets extends Component {
 
       assets.data.translatableAssets.forEach(asset => {
         const typename = asset.__typename;
-        let itemStr = "";
         if (typename === "TenantTheme") {
           this.setState({
             tenantThemeData: asset
@@ -143,7 +142,6 @@ class ListFile extends Component {
     return (
       <div>
         <List onSubmit={list => this.props.onListSubmitted(list)}>
-          //@ts-ignore
           {this.props.itemList.map(l => <ListItem value={l}>{l}</ListItem>)}
         </List>
       </div>
@@ -333,7 +331,7 @@ class DownloadEachFile extends Component {
     return (
       <div>
         {" "}
-        <Spinner green /> Downloading {this.props.name}{" "}
+        <Spinner green />  Downloading {this.props.name}{" "}
       </div>
     );
   }
@@ -346,9 +344,9 @@ class FinishCheckmark extends Component {
 
   render() {
     return (
-      <div>
-        <Color green> ✔ </Color> {this.props.name} translations downloaded
-      </div>
+      <div>{" "}
+        <Color green>✔ </Color> {this.props.name} translations downloaded
+        {" "}</div>
     );
   }
 }
@@ -366,7 +364,7 @@ module.exports = program => {
   download
     .description("download an translation")
     .option("-d,--domainname <domainname>", "required - domain") //naming collision with domain, use domain name instead
-    .option("-u,--authToken <authToken>", "required - authToken") //the apiKey, use authToken to avoid naming collision
+    .option("-k,--authToken <authToken>", "required - authToken") //the apiKey, use authToken to avoid naming collision
     .option("-t,--tenant <tenant>", "required - which tenant")
     .option("-f,--filepath <filepath>", "required - the file path")
     .action(options => {
