@@ -26,14 +26,17 @@ class UploadAssets extends Component {
     this.state = {
       inputData: {},
       validKeys: [],
-      filelist: []
+      filelist: [],
+      allDone: false
     };
     this.handleUploadAllDone = this.handleUploadAllDone.bind(this);
     this.setFileList = this.setFileList.bind(this);
   }
 
   handleUploadAllDone() {
-    process.exit();
+    this.setState({
+        allDone: true
+    });
   }
 
   setFileList(list) {
@@ -93,6 +96,12 @@ class UploadAssets extends Component {
     this.setValidKeys();
   }
 
+  componentWillUpdate() {
+    if (this.state.allDone) {
+        process.exit();
+    }
+  }
+
   render() {
     if (this.state.filelist.length > 0) {
       return (
@@ -149,10 +158,6 @@ class Checkmark extends Component {
     super(props);
   }
 
-  componentDidMount() {
-    this.props.setCheckmark(this.props.name);
-  }
-
   render() {
     return (
       <div>
@@ -192,7 +197,7 @@ class ReadingFile extends Component {
     });
   }
 
-  componentWillMount() {
+  componentDidMount() {
     const validKeys = this.props.validKeys;
     const validKeyPattern = this.getValidKeyPattern(validKeys);
     let pattern = null;
@@ -205,13 +210,13 @@ class ReadingFile extends Component {
     glob(pattern, { mark: true }, (err, files) => {
       if (err) {
         console.error(err);
+        process.exit();
       }
       const validfiles = this.getValidFilelist(files, validKeys);
       if (validfiles.length === 0) {
         console.log("No valid translation file found.");
         process.exit();
       }
-
       this.props.setFileList(validfiles);
     });
   }
@@ -232,12 +237,10 @@ class UploadingFiles extends Component {
 
     this.state = {
       eachFileDone: {},
-      eachFileChecked: {},
       allDone: false
     };
 
     this.handleSingleUploadDone = this.handleSingleUploadDone.bind(this);
-    this.setCheckmark = this.setCheckmark.bind(this);
   }
 
   componentWillMount() {
@@ -247,7 +250,6 @@ class UploadingFiles extends Component {
     });
     this.setState({
       eachFileDone: temp,
-      eachFileChecked: temp
     });
   }
 
@@ -261,48 +263,30 @@ class UploadingFiles extends Component {
     this.setState(prevState => {
       let status = prevState.eachFileDone;
       status[name] = true;
-      return {
-        eachFileDone: status
-      };
-    });
-  }
-
-  setCheckmark(name) {
-    this.setState(prevState => {
-      let status = prevState.eachFileChecked;
-      status[name] = true;
       let allFileChecked = true;
       Object.keys(status).forEach(k => {
         allFileChecked = allFileChecked && status[k];
       });
       return {
-        eachFileChecked: status,
+        eachFileDone: status,
         allDone: allFileChecked
       };
     });
   }
 
   render() {
-    let uploadComponentList = [];
-    this.props.filelist.forEach(path => {
+     const uploadComponentList = this.props.filelist.map(path => {
       if (this.state.eachFileDone[path]) {
-        uploadComponentList = [
-          ...uploadComponentList,
-          <Checkmark name={path} setCheckmark={this.setCheckmark} />
-        ];
+          return (<div> <Color green> ✔ </Color> Uploaded {path} </div>);
       } else {
-        uploadComponentList = [
-          ...uploadComponentList,
-          <UploadingEachFile
+         return ( <UploadingEachFile
             path={path}
             options={this.props.options}
             handleSingleUploadDone={this.handleSingleUploadDone}
-          />
-        ];
+          />);
       }
     });
-
-    return uploadComponentList;
+    return (<div>{uploadComponentList}</div>);
   }
 }
 
@@ -340,10 +324,12 @@ class UploadingEachFile extends Component {
     fs.open(path, "r", (err, fd) => {
       if (err) {
         return console.error(err);
+        process.exit();
       }
       fs.readFile(path, "utf8", async (err, data) => {
         if (err) {
           return console.error(err);
+          process.exit();
         }
 
         let {
@@ -414,8 +400,6 @@ module.exports = program => {
             console.log('Missing parameter.');
             return;
         }
-
-
 
       if (!currentValidTypes.includes(options.typename)) {
         console.log("Invalid typename, must be one of TenantTheme, ProgramEmailConfig, ProgramLinkConfig, ProgramWidgetConfig.");
