@@ -35,11 +35,15 @@ class UploadAssets extends Component {
 
   handleUploadAllDone() {
     this.setState({
-        allDone: true
+      allDone: true
     });
   }
 
   setFileList(list) {
+    if (list.length === 0) {
+      console.log("\nNo valid translation file found.");
+      process.exit();
+    }
     this.setState({
       filelist: list
     });
@@ -98,7 +102,7 @@ class UploadAssets extends Component {
 
   componentWillUpdate() {
     if (this.state.allDone) {
-        process.exit();
+      process.exit();
     }
   }
 
@@ -172,6 +176,10 @@ class Checkmark extends Component {
 class ReadingFile extends Component {
   constructor(props) {
     super(props);
+
+    this.state = {
+        noFile:false
+    }
   }
 
   //put valid keys into a pattern string for directory traversal and validation
@@ -214,20 +222,23 @@ class ReadingFile extends Component {
       }
       const validfiles = this.getValidFilelist(files, validKeys);
       if (validfiles.length === 0) {
-        console.log("No valid translation file found.");
-        process.exit();
+          this.setState({noFile:true});
       }
       this.props.setFileList(validfiles);
     });
   }
 
   render() {
-    return (
-      <div>
+      if(this.state.noFile) {
+          return;
+      } else {
+    return 
+      (<div>
         {" "}
         <Spinner green /> Reading{" "}
       </div>
     );
+}
   }
 }
 
@@ -249,7 +260,7 @@ class UploadingFiles extends Component {
       temp[path] = false;
     });
     this.setState({
-      eachFileDone: temp,
+      eachFileDone: temp
     });
   }
 
@@ -275,18 +286,25 @@ class UploadingFiles extends Component {
   }
 
   render() {
-     const uploadComponentList = this.props.filelist.map(path => {
+    const uploadComponentList = this.props.filelist.map(path => {
       if (this.state.eachFileDone[path]) {
-          return (<div> <Color green> ✔ </Color> Uploaded {path} </div>);
+        return (
+          <div>
+            {" "}
+            <Color green> ✔ </Color> Uploaded {path}{" "}
+          </div>
+        );
       } else {
-         return ( <UploadingEachFile
+        return (
+          <UploadingEachFile
             path={path}
             options={this.props.options}
             handleSingleUploadDone={this.handleSingleUploadDone}
-          />);
+          />
+        );
       }
     });
-    return (<div>{uploadComponentList}</div>);
+    return <div>{uploadComponentList}</div>;
   }
 }
 
@@ -370,8 +388,8 @@ class UploadingEachFile extends Component {
   render() {
     return (
       <div>
-        {" "}
-        <Spinner green /> Uploading {this.props.path}{" "}
+        {"  "}
+        <Spinner green />{"  "} Uploading {this.props.path}{" "}
       </div>
     );
   }
@@ -395,22 +413,31 @@ module.exports = program => {
       "optional - Program Id is required for ProgramEmailConfig, ProgramLinkConfig, ProgramWidgetConfig"
     )
     .action(options => {
-
-        if (!options.domainname || !options.apiKey || !options.tenant || !options.filepath || !options.typename) {
-            console.log('Missing parameter.');
-            return;
-        }
+      if (
+        !options.domainname ||
+        !options.apiKey ||
+        !options.tenant ||
+        !options.filepath ||
+        !options.typename
+      ) {
+        console.log("Missing parameter");
+        return;
+      }
 
       if (!currentValidTypes.includes(options.typename)) {
-        console.log("Invalid typename, must be one of TenantTheme, ProgramEmailConfig, ProgramLinkConfig, ProgramWidgetConfig.");
+        console.log(
+          "Invalid typename, must be one of TenantTheme, ProgramEmailConfig, ProgramLinkConfig, ProgramWidgetConfig."
+        );
         process.exit();
       }
-      if (options.typename !== 'TenantTheme' && !options.programId) {
-        console.log('Program Id required for ProgramEmailConfig, ProgramLinkConfig, ProgramWidgetConfig.');
+      if (options.typename !== "TenantTheme" && !options.programId) {
+        console.log(
+          "Program Id required for ProgramEmailConfig, ProgramLinkConfig, ProgramWidgetConfig."
+        );
         return;
-    }
+      }
       const newOptions = {
-        auth: base64.encode(":" + options.apiKey ),
+        auth: base64.encode(":" + options.apiKey),
         ...options
       };
       render(<UploadAssets options={newOptions} />);

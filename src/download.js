@@ -57,7 +57,7 @@ class DownloadAssets extends Component {
           listItem.push("TenantTheme");
         }
       });
-    } catch (e) {
+    } catch (e) { 
       console.error(e);
     }
 
@@ -77,6 +77,11 @@ class DownloadAssets extends Component {
       progMap[programName] = program.id;
     });
 
+    if(listItem.length === 0) {
+      console.log("\nNo available translatable asset found.");
+      process.exit();
+    }
+
     this.setState({
       programList: programData.data.programs,
       programMap: progMap,
@@ -95,10 +100,14 @@ class DownloadAssets extends Component {
   }
 
   handleListSubmission(list) {
+    if(list.length > 0) {
     this.setState({
       selectedItem: list,
       submitted: true
     });
+  } else {
+    process.exit();
+  }
   }
 
   handleAllDone() {
@@ -135,15 +144,16 @@ class DownloadAssets extends Component {
 class ListFile extends Component {
   constructor(props) {
     super(props);
-    //this.handleSubmit = this.handleSubmit.bind(this);
   }
 
   render() {
     return (
       <div>
-        <List onSubmit={list => this.props.onListSubmitted(list)}>
+        <br></br>  
+          Use arrow keys to move between options. Use space to select and enter to submit.<br></br>  
+        <List onSubmit={list => this.props.onListSubmitted(list)}>  
           {this.props.itemList.map(l => <ListItem value={l}>{l}</ListItem>)}
-        </List>
+        </List> 
       </div>
     );
   }
@@ -269,7 +279,6 @@ class DownloadEachFile extends Component {
       mkdirp.sync(programRootPath);
       //put default in root folder of each program
       const assets = programData.translatableAssets;
-
       for (var i = 0; i < assets.length; i++) {
         const assetData = assets[i];
         const path = programRootPath + "/" + assetData.__typename;
@@ -291,18 +300,18 @@ class DownloadEachFile extends Component {
           });
           //write translations
           const transPath = path + "/" + assetData.key;
-          this.writeTranslation(transPath, assetData);
+          await this.writeTranslation(transPath, assetData);
         }
-      }
     }
+  }
     this.props.handleDownloadDone(this.props.name);
   }
 
-  async writeTranslation(transPath, assetData) {
+   writeTranslation(transPath, assetData) {
     const translations = assetData.translationInfo.translations;
     mkdirp.sync(transPath);
     for (var i = 0; i < translations.length; i++) {
-      await this.writeFile({
+        this.writeFile({
         data: JSON.stringify(translations[i].content),
         dir: transPath,
         name: translations[i].locale
@@ -361,9 +370,8 @@ module.exports = program => {
     .option("-t,--tenant <tenant>", "required - which tenant")
     .option("-f,--filepath <filepath>", "required - the file path")
     .action(options => {
-      console.log(options.apiKey);
       if (!options.domainname || !options.apiKey || !options.tenant || !options.filepath) {
-        console.log('Missing parameter.');
+        console.log('Missing parameter');
         return;
     }
       const newOptions = {
